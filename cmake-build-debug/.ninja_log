@@ -1,0 +1,11 @@
+# ninja log v6
+17	4383	7647919056302519	CMakeFiles/SO2_Projekt_1.dir/main.cpp.obj	552b90b872776371
+4384	4742	7647919099969816	SO2_Projekt_1.exe	d3eaf29400d6879b
+53	1778	7647924888461131	CMakeFiles/SO2_Projekt_1.dir/Wersja1.cpp.obj	ea4be69e8aab3c55
+1779	4826	7647924905714920	CMakeFiles/SO2_Projekt_1.dir/Wersja3.cpp.obj	a8c8bfceb7f5b469
+5	1752	7647926501611429	CMakeFiles/SO2_Projekt_1.dir/main.cpp.obj	552b90b872776371
+14	1758	7647926501695241	CMakeFiles/SO2_Projekt_1.dir/Wersja2.cpp.obj	c95f70411dd9da84
+13	2009	7647927735690323	CMakeFiles/SO2_Projekt_1.dir/main.cpp.obj	552b90b872776371
+49	2923	7647927736052879	CMakeFiles/SO2_Projekt_1.dir/Wersja2.cpp.obj	c95f70411dd9da84
+6	2060	7647927855426153	CMakeFiles/SO2_Projekt_1.dir/Wersja1.cpp.obj	ea4be69e8aab3c55
+2061	2503	7647927875979186	SO2_Projekt_1.exe	2163d39a8edcd3f1
