@@ -1,10 +1,9 @@
-#ifndef WERSZJ3_H
+#ifndef WERSJA3_H
 #define WERSJA3_H
 
 #include <vector>
 #include <thread>
 #include <mutex>
-#include <string>
 #include <atomic>
 #include <condition_variable>
 
@@ -15,15 +14,14 @@ public:
 
 private:
     static const int NUM_PHILOSOPHERS = 5;
-    static const int NUM_MEALS = 20;
+    static const int NUM_MEALS = 5;
 
     struct Chopstick {
         std::mutex mtx;
-        int holder;
+        std::atomic<int> holder;
         Chopstick() : holder(-1) {}
     };
 
-    // Klasa Waiter do unikania zakleszczenia
     class Waiter {
     public:
         Waiter(int count);
@@ -38,11 +36,12 @@ private:
     std::vector<Chopstick> chopsticks;
     Waiter waiter;
     std::mutex printMutex;
-    std::vector<std::atomic<int>> mealsEaten; // liczba posilkow zjedzonych przez kazdego filozofa
+    std::vector<std::atomic<int>> mealsEaten;
 
     void printMessage(const std::string &msg);
     void philosopher(int id);
     int randomTime(int min, int max);
+    void printSummary();
 };
 
 #endif // WERSJA3_H

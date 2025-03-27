@@ -1,13 +1,11 @@
 #include "Wersja3.h"
 #include <iostream>
-#include <sstream>
+#include <chrono>
 #include <cstdlib>
 #include <ctime>
-#include <chrono>
-#include <algorithm>
 #include <climits>
+#include <algorithm>
 
-// Implementacja klasy Waiter
 Wersja3::Waiter::Waiter(int count) : available(count) {}
 
 void Wersja3::Waiter::acquire() {
@@ -42,88 +40,119 @@ int Wersja3::randomTime(int min, int max) {
 
 void Wersja3::philosopher(int id) {
     for (int i = 0; i < NUM_MEALS; i++) {
-        // Mechanizm sprawiedliwosci: jezeli filozof zjadl juz wiecej niz pozostali, dodatkowo czeka
+        // Sprawiedliwosc
         int minMeals = INT_MAX;
         for (int j = 0; j < NUM_PHILOSOPHERS; j++) {
-            int eaten = mealsEaten[j].load();
-            if (eaten < minMeals) {
-                minMeals = eaten;
-            }
+            minMeals = std::min(minMeals, mealsEaten[j].load());
         }
+
         if (mealsEaten[id].load() > minMeals + 1) {
-            std::stringstream ss;
-            ss << "Filozof " << id << " czeka dla sprawiedliwosci (zjadl " << mealsEaten[id].load()
-               << ", minimum " << minMeals << ").";
-            printMessage(ss.str());
+            {
+                std::lock_guard<std::mutex> lock(printMutex);
+                std::cout << "[Filozof " << id << "] czeka (zjadl " << mealsEaten[id] << ", min " << minMeals << ")." << std::endl;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(randomTime(1000, 4000)));
-            i--; // iteracja nie jest liczona
+            i--;
             continue;
         }
 
-        std::stringstream ss;
-        ss << "Filozof " << id << " mysli.";
-        printMessage(ss.str());
+        {
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] mysli." << std::endl;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(randomTime(1000, 4000)));
 
-        // Uzyskujemy zgode od waitera
         waiter.acquire();
-        ss.str("");
-        ss << "Filozof " << id << " otrzymal zgode od waitera.";
-        printMessage(ss.str());
+        {
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] otrzymal zgode od waitera." << std::endl;
+        }
 
-        // Aby uniknac zakleszczenia - zawsze podnosimy paleczki w kolejnosci rosnacych indeksow
         int left = id;
         int right = (id + 1) % NUM_PHILOSOPHERS;
         int first = std::min(left, right);
         int second = std::max(left, right);
 
-        ss.str("");
-        ss << "Filozof " << id << " probuje podniesc paleczke (" << first << ").";
-        printMessage(ss.str());
-        chopsticks[first].mtx.lock();
-        chopsticks[first].holder = id;
-        ss.str("");
-        ss << "Filozof " << id << " podniosl paleczke (" << first << ").";
-        printMessage(ss.str());
+        // Pierwsza paleczka
+        while (true) {
+            bool locked = chopsticks[first].mtx.try_lock();
+            {
+                std::lock_guard<std::mutex> lock(printMutex);
+                std::cout << "[Filozof " << id << "] probuje podniesc paleczke (" << first << ")... ";
+                if (locked) {
+                    chopsticks[first].holder.store(id);
+                    std::cout << "- OK" << std::endl;
+                } else {
+                    int h = chopsticks[first].holder.load();
+                    if (h != -1)
+                        std::cout << "- NIEUDANA (trzyma filozof " << h << ")" << std::endl;
+                    else
+                        std::cout << "- NIEUDANA (paleczka zajeta)" << std::endl;
+                }
+            }
+            if (locked) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
 
-        ss.str("");
-        ss << "Filozof " << id << " probuje podniesc paleczke (" << second << ").";
-        printMessage(ss.str());
-        chopsticks[second].mtx.lock();
-        chopsticks[second].holder = id;
-        ss.str("");
-        ss << "Filozof " << id << " podniosl paleczke (" << second << ").";
-        printMessage(ss.str());
+        // Druga paleczka
+        while (true) {
+            bool locked = chopsticks[second].mtx.try_lock();
+            {
+                std::lock_guard<std::mutex> lock(printMutex);
+                std::cout << "[Filozof " << id << "] probuje podniesc paleczke (" << second << ")... ";
+                if (locked) {
+                    chopsticks[second].holder.store(id);
+                    std::cout << "- OK" << std::endl;
+                } else {
+                    int h = chopsticks[second].holder.load();
+                    if (h != -1)
+                        std::cout << "- NIEUDANA (trzyma filozof " << h << ")" << std::endl;
+                    else
+                        std::cout << "- NIEUDANA (paleczka zajeta)" << std::endl;
+                }
+            }
+            if (locked) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
 
-        ss.str("");
-        ss << "Filozof " << id << " je (posilek " << i+1 << ").";
-        printMessage(ss.str());
+        {
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] je (posilek " << i + 1 << ")." << std::endl;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(randomTime(1000, 2000)));
         mealsEaten[id]++;
 
-        // Odkladanie paleczek
-        chopsticks[second].holder = -1;
+        chopsticks[second].holder.store(-1);
         chopsticks[second].mtx.unlock();
-        chopsticks[first].holder = -1;
+        chopsticks[first].holder.store(-1);
         chopsticks[first].mtx.unlock();
 
-        ss.str("");
-        ss << "Filozof " << id << " skonczyl posilek " << i+1 << " i odlozyl paleczki.";
-        printMessage(ss.str());
-        printMessage("-----------------------------------------------------");
+        {
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] skonczyl posilek " << i + 1 << " i odlozyl paleczki." << std::endl;
+            std::cout << "-----------------------------------------------------" << std::endl;
+        }
 
-        // Zwolnienie waitera
         waiter.release();
+    }
+}
+
+void Wersja3::printSummary() {
+    std::lock_guard<std::mutex> lock(printMutex);
+    std::cout << "\n==== Podsumowanie posilkow ====" << std::endl;
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        std::cout << "Filozof " << i << " zjadl " << mealsEaten[i] << " posilkow" << std::endl;
     }
 }
 
 void Wersja3::run() {
     std::vector<std::thread> threads;
     for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
-        threads.push_back(std::thread(&Wersja3::philosopher, this, i));
+        threads.emplace_back(&Wersja3::philosopher, this, i);
     }
     for (auto &t : threads) {
         t.join();
     }
     printMessage("Wszyscy filozofowie skonczyli posilki.");
+    printSummary();
 }

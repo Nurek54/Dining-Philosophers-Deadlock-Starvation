@@ -2,7 +2,6 @@
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
-#include <sstream>
 #include <chrono>
 
 Wersja1::Wersja1() : chopsticks(NUM_PHILOSOPHERS) {
@@ -18,55 +17,69 @@ int Wersja1::randomTime(int min, int max) {
     return rand() % (max - min + 1) + min;
 }
 
-// Wersja 1 (naive): kazdy filozof podnosi najpierw lewa, potem prawa paleczke
 void Wersja1::philosopher(int id) {
     for (int i = 0; i < NUM_MEALS; i++) {
-        std::stringstream ss;
-        ss << "Filozof " << id << " mysli.";
-        printMessage(ss.str());
+        {
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] mysli." << std::endl;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(randomTime(1000, 4000)));
 
-        ss.str("");
-        ss << "Filozof " << id << " probuje podniesc lewa paleczke (" << id << ").";
-        printMessage(ss.str());
-        chopsticks[id].mtx.lock();
-        chopsticks[id].holder = id;
-        ss.str("");
-        ss << "Filozof " << id << " podniosl lewa paleczke (" << id << ").";
-        printMessage(ss.str());
+        // Próba lewa paleczka
+        while (true) {
+            bool locked = chopsticks[id].mtx.try_lock();
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] probuje podniesc lewa paleczke (" << id << ")... ";
+            if (locked) {
+                chopsticks[id].holder = id;
+                std::cout << "- OK" << std::endl;
+                break;
+            } else {
+                std::cout << "- NIEUDANA (trzyma filozof " << chopsticks[id].holder << ")" << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+        }
 
+        // Próba prawa paleczka
         int right = (id + 1) % NUM_PHILOSOPHERS;
-        ss.str("");
-        ss << "Filozof " << id << " probuje podniesc prawa paleczke (" << right << ").";
-        printMessage(ss.str());
-        chopsticks[right].mtx.lock();
-        chopsticks[right].holder = id;
-        ss.str("");
-        ss << "Filozof " << id << " podniosl prawa paleczke (" << right << ").";
-        printMessage(ss.str());
+        while (true) {
+            bool locked = chopsticks[right].mtx.try_lock();
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] probuje podniesc prawa paleczke (" << right << ")... ";
+            if (locked) {
+                chopsticks[right].holder = id;
+                std::cout << "- OK" << std::endl;
+                break;
+            } else {
+                std::cout << "- NIEUDANA (trzyma filozof " << chopsticks[right].holder << ")" << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+        }
 
-        ss.str("");
-        ss << "Filozof " << id << " je (posilek " << i+1 << ").";
-        printMessage(ss.str());
+        {
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] je (posilek " << i + 1 << ")." << std::endl;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(randomTime(1000, 2000)));
 
-        // Odkladanie paleczek
+        // Odkładanie
         chopsticks[right].holder = -1;
         chopsticks[right].mtx.unlock();
         chopsticks[id].holder = -1;
         chopsticks[id].mtx.unlock();
 
-        ss.str("");
-        ss << "Filozof " << id << " skonczyl posilek " << i+1 << " i odlozyl paleczki.";
-        printMessage(ss.str());
-        printMessage("-----------------------------------------------------");
+        {
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "[Filozof " << id << "] skonczyl posilek " << i + 1 << " i odlozyl paleczki." << std::endl;
+            std::cout << "-----------------------------------------------------" << std::endl;
+        }
     }
 }
 
 void Wersja1::run() {
     std::vector<std::thread> threads;
     for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
-        threads.push_back(std::thread(&Wersja1::philosopher, this, i));
+        threads.emplace_back(&Wersja1::philosopher, this, i);
     }
     for (auto &t : threads) {
         t.join();

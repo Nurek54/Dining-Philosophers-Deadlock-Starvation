@@ -13,7 +13,7 @@ public:
 
 private:
     static const int NUM_PHILOSOPHERS = 5;
-    static const int NUM_MEALS = 20;
+    static const int NUM_MEALS = 5;
 
     struct Chopstick {
         std::mutex mtx;
