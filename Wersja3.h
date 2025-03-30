@@ -6,6 +6,9 @@
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include <string>
+
+using namespace std;
 
 class Wersja3 {
 public:
@@ -14,14 +17,18 @@ public:
 
 private:
     static const int NUM_PHILOSOPHERS = 5;
-    static const int NUM_MEALS = 5;
 
+    // Nazwy filozofow
+    vector<string> names;
+
+    // Struktura reprezentujaca paleczke
     struct Chopstick {
-        std::mutex mtx;
-        std::atomic<int> holder;
+        mutex mtx;
+        atomic<int> holder; // -1 oznacza, ze paleczka jest wolna
         Chopstick() : holder(-1) {}
     };
 
+    // Klasa Waiter zapobiegajaca zakleszczeniom
     class Waiter {
     public:
         Waiter(int count);
@@ -29,18 +36,18 @@ private:
         void release();
     private:
         int available;
-        std::mutex mtx;
-        std::condition_variable cv;
+        mutex mtx;
+        condition_variable cv;
     };
 
-    std::vector<Chopstick> chopsticks;
+    vector<Chopstick> chopsticks;
     Waiter waiter;
-    std::mutex printMutex;
-    std::vector<std::atomic<int>> mealsEaten;
+    mutex printMutex;
+    vector<atomic<int>> mealsEaten; // licznik posilkow dla kazdego filozofa
 
-    void printMessage(const std::string &msg);
+    void printMessage(const string &msg);
     void philosopher(int id);
-    int randomTime(int min, int max);
+    int randomTime(int min, int max, int philosopherId);
     void printSummary();
 };
 

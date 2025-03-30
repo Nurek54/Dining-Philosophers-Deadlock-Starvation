@@ -9,4 +9,5 @@ add_executable(SO2_Projekt_1 main.cpp
         Wersja2.cpp
         Wersja2.h
         Wersja3.cpp
-        Wersja3.h)
+        Wersja3.h
+)

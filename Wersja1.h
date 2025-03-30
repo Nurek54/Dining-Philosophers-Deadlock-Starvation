@@ -5,6 +5,9 @@
 #include <thread>
 #include <mutex>
 #include <string>
+#include <atomic>
+
+using namespace std;
 
 class Wersja1 {
 public:
@@ -13,22 +16,25 @@ public:
 
 private:
     static const int NUM_PHILOSOPHERS = 5;
-    static const int NUM_MEALS = 20;
 
-    // Struktura reprezentujaca paleczke
+    // Nazwy filozofow
+    vector<string> names;
+
+    // Struktura reprezentujaca chopstick (paleczke)
     struct Chopstick {
-        std::mutex mtx;
-        int holder; // -1 oznacza, ze paleczka jest wolna
+        mutex mtx;
+        atomic<int> holder; // -1 oznacza, ze jest wolna
         Chopstick() : holder(-1) {}
     };
 
-    std::vector<Chopstick> chopsticks;
-    std::mutex printMutex;
+    vector<Chopstick> chopsticks;
+    mutex printMutex;
+    vector<atomic<int>> mealsEaten; // licznik posilkow dla kazdego filozofa
 
     // Pomocnicze metody
-    void printMessage(const std::string &msg);
+    void printMessage(const string &msg);
     void philosopher(int id);
-    int randomTime(int min, int max);
+    int randomTime(int min, int max, int philosopherId);
 };
 
 #endif // WERSJA1_H
