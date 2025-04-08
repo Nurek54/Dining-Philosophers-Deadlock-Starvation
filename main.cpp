@@ -7,7 +7,6 @@
 
 using namespace std;
 
-// Globalna flaga sterująca symulacją
 atomic<bool> running(true);
 
 int main() {
@@ -24,7 +23,7 @@ int main() {
         }
     }
 
-    cin.ignore(); // Usunięcie znaku nowej linii po wczytaniu numeru wersji
+    cin.ignore(); // usuwa znak nowej linii po wczytaniu numeru wersji
 
     if (version == 1) {
         cout << "Uruchamianie wersji 1 (moze dojsc do zakleszczenia)..." << endl;

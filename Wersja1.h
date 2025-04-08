@@ -17,10 +17,8 @@ public:
 private:
     static const int NUM_PHILOSOPHERS = 5;
 
-    // Nazwy filozofow
     vector<string> names;
 
-    // Struktura reprezentujaca chopstick (paleczke)
     struct Chopstick {
         mutex mtx;
         atomic<int> holder; // -1 oznacza, ze jest wolna
@@ -31,7 +29,6 @@ private:
     mutex printMutex;
     vector<atomic<int>> mealsEaten; // licznik posilkow dla kazdego filozofa
 
-    // Pomocnicze metody
     void printMessage(const string &msg);
     void philosopher(int id);
     int randomTime(int min, int max, int philosopherId);

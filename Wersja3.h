@@ -18,17 +18,15 @@ public:
 private:
     static const int NUM_PHILOSOPHERS = 5;
 
-    // Nazwy filozofow
     vector<string> names;
 
-    // Struktura reprezentujaca paleczke
     struct Chopstick {
         mutex mtx;
-        atomic<int> holder; // -1 oznacza, ze paleczka jest wolna
+        atomic<int> holder;  // -1 oznacza wolną pałeczkę
         Chopstick() : holder(-1) {}
     };
 
-    // Klasa Waiter zapobiegajaca zakleszczeniom
+    // Klasa Waiter – ogranicza liczbę filozofów próbujących jednocześnie brać dwie pałeczki
     class Waiter {
     public:
         Waiter(int count);
@@ -43,7 +41,8 @@ private:
     vector<Chopstick> chopsticks;
     Waiter waiter;
     mutex printMutex;
-    vector<atomic<int>> mealsEaten; // licznik posilkow dla kazdego filozofa
+    vector<atomic<int>> mealsEaten;
+    vector<string> statuses;
 
     void printMessage(const string &msg);
     void philosopher(int id);

@@ -10,7 +10,6 @@
 
 using namespace std;
 
-// Globalna flaga sterujaca symulacja zadeklarowana w main.cpp
 extern atomic<bool> running;
 
 // Implementacja klasy Waiter
@@ -33,7 +32,8 @@ void Wersja3::Waiter::release() {
 Wersja3::Wersja3()
         : chopsticks(NUM_PHILOSOPHERS),
           waiter(NUM_PHILOSOPHERS - 1),
-          mealsEaten(NUM_PHILOSOPHERS)
+          mealsEaten(NUM_PHILOSOPHERS),
+          statuses(NUM_PHILOSOPHERS, "mysli")
 {
     srand(static_cast<unsigned int>(time(NULL)));
     for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
@@ -53,10 +53,11 @@ int Wersja3::randomTime(int min, int max, int philosopherId) {
 }
 
 void Wersja3::philosopher(int id) {
-    int left = id;
-    int right = (id + 1) % NUM_PHILOSOPHERS;
+    int right = id;
+    int left = (id - 1 + NUM_PHILOSOPHERS) % NUM_PHILOSOPHERS;
+
     while (running.load()) {
-        // Sprawiedliwosc - sprawdzamy minimalna liczbe posilkow
+        // Sprawdzamy liczbę posiłków w celu sprawiedliwego podziału
         int minMeals = INT_MAX;
         for (int j = 0; j < NUM_PHILOSOPHERS; j++) {
             minMeals = min(minMeals, mealsEaten[j].load());
@@ -64,6 +65,7 @@ void Wersja3::philosopher(int id) {
         if (mealsEaten[id].load() > minMeals + 1) {
             {
                 lock_guard<mutex> lock(printMutex);
+                statuses[id] = "czeka (fairness)";
                 cout << "[" << names[id] << " (Filozof " << id
                      << ")] czeka (Posilki: " << mealsEaten[id].load()
                      << ", Min: " << minMeals << ")." << endl;
@@ -72,24 +74,31 @@ void Wersja3::philosopher(int id) {
             continue;
         }
 
+        // Myślenie
         {
             lock_guard<mutex> lock(printMutex);
+            statuses[id] = "mysli";
             cout << "[" << names[id] << " (Filozof " << id << ")] mysli." << endl;
         }
         this_thread::sleep_for(chrono::milliseconds(randomTime(1000, 4000, id)));
 
-        // Uzyskujemy zgode od waitera
+        // Uzyskujemy zgodę od waitera (eliminuje deadlock)
         waiter.acquire();
         {
             lock_guard<mutex> lock(printMutex);
-            cout << "[" << names[id] << " (Filozof " << id
-                 << ")] otrzymal zgode od waitera." << endl;
+            statuses[id] = "posiada zgode od waitera";
+            cout << "[" << names[id] << " (Filozof " << id << ")] otrzymal zgode od waitera." << endl;
         }
 
-        // Pobieranie paleczek - w kolejnosci rosnacej indeksu
+        // Blokujemy pałeczki w kolejności rosnących indeksów, aby uniknąć kolizji
         int first = min(left, right);
         int second = max(left, right);
+        {
+            lock_guard<mutex> lock(printMutex);
+            statuses[id] = "czeka na paleczki";
+        }
 
+        // Pobieranie first
         while (running.load()) {
             if (chopsticks[first].mtx.try_lock()) {
                 chopsticks[first].holder.store(id);
@@ -102,6 +111,14 @@ void Wersja3::philosopher(int id) {
             }
             this_thread::sleep_for(chrono::milliseconds(100));
         }
+        if (!running.load()) {
+            // W razie przerwania symulacji, zwalniamy waitera i koniec
+            chopsticks[first].mtx.unlock();
+            waiter.release();
+            break;
+        }
+
+        // Pobieranie second
         while (running.load()) {
             if (chopsticks[second].mtx.try_lock()) {
                 chopsticks[second].holder.store(id);
@@ -114,16 +131,23 @@ void Wersja3::philosopher(int id) {
             }
             this_thread::sleep_for(chrono::milliseconds(100));
         }
+        if (!running.load()) {
+            chopsticks[first].holder.store(-1);
+            chopsticks[first].mtx.unlock();
+            waiter.release();
+            break;
+        }
 
-        // Jedzenie
+        // Teraz mamy obie pałeczki -> jedzenie
         {
             lock_guard<mutex> lock(printMutex);
+            statuses[id] = "je ryz";
             cout << "[" << names[id] << " (Filozof " << id << ")] je." << endl;
         }
         this_thread::sleep_for(chrono::milliseconds(randomTime(1000, 4000, id)));
         mealsEaten[id]++;
 
-        // Okladanie paleczek
+        // Odkładanie pałeczek
         chopsticks[second].holder.store(-1);
         chopsticks[second].mtx.unlock();
         chopsticks[first].holder.store(-1);
@@ -131,6 +155,7 @@ void Wersja3::philosopher(int id) {
 
         {
             lock_guard<mutex> lock(printMutex);
+            statuses[id] = "odklada";
             cout << "[" << names[id] << " (Filozof " << id
                  << ")] zakonczyl posilek i odlozyl paleczki." << endl;
         }
@@ -138,6 +163,7 @@ void Wersja3::philosopher(int id) {
 
         {
             lock_guard<mutex> lock(printMutex);
+            statuses[id] = "mysli";
             cout << "[" << names[id] << " (Filozof " << id << ")] mysli." << endl;
         }
         this_thread::sleep_for(chrono::milliseconds(randomTime(2000, 5000, id)));
@@ -159,7 +185,6 @@ void Wersja3::run() {
         threads.emplace_back(&Wersja3::philosopher, this, i);
     }
 
-    // Monitor - wyswietla co 1 sekunde stan paleczek i licznik posilkow w jednej tabelce
     thread monitor([this]() {
         while (running.load()) {
             {
@@ -168,31 +193,36 @@ void Wersja3::run() {
                 cout << left << setw(12) << "Filozof"
                      << setw(20) << "Lewa paleczka"
                      << setw(20) << "Prawa paleczka"
-                     << setw(10) << "Posilki" << endl;
-                cout << "--------------------------------------------------------------" << endl;
-                for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
-                    string leftStatus, rightStatus;
-                    if (chopsticks[i].holder.load() == i)
-                        leftStatus = "W rece";
-                    else if(chopsticks[i].holder.load() == -1)
-                        leftStatus = "Wolna";
-                    else
-                        leftStatus = "P" + to_string(chopsticks[i].holder.load());
+                     << setw(10) << "Posilki"
+                     << setw(20) << "Status" << endl;
+                cout << "--------------------------------------------------------------------------------" << endl;
 
-                    int rIndex = (i + 1) % NUM_PHILOSOPHERS;
-                    if (chopsticks[rIndex].holder.load() == i)
-                        rightStatus = "W rece";
-                    else if(chopsticks[rIndex].holder.load() == -1)
-                        rightStatus = "Wolna";
-                    else
-                        rightStatus = "P" + to_string(chopsticks[rIndex].holder.load());
+                for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+                    int lIndex = (i - 1 + NUM_PHILOSOPHERS) % NUM_PHILOSOPHERS;
+                    string leftStatus;
+                    int holderLeft = chopsticks[lIndex].holder.load();
+                    if (holderLeft == -1) {
+                        leftStatus = "wolna";
+                    } else {
+                        leftStatus = "F" + to_string(holderLeft);
+                    }
+
+                    string rightStatus;
+                    int holderRight = chopsticks[i].holder.load();
+                    if (holderRight == -1) {
+                        rightStatus = "wolna";
+                    } else {
+                        rightStatus = "F" + to_string(holderRight);
+                    }
 
                     cout << left << setw(12) << names[i]
                          << setw(20) << leftStatus
                          << setw(20) << rightStatus
-                         << setw(10) << mealsEaten[i].load() << endl;
+                         << setw(10) << mealsEaten[i].load()
+                         << setw(20) << statuses[i]
+                         << endl;
                 }
-                cout << "===================================" << endl;
+                cout << "--------------------------------------------------------------------------------" << endl;
             }
             this_thread::sleep_for(chrono::seconds(1));
         }
