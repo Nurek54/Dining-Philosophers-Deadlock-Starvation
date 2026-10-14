@@ -1,3 +1,0 @@
-C:/Users/g_sie/OneDrive/Pulpit/SO2_Projekt_1/cmake-build-debug/CMakeFiles/SO2_Projekt_1.dir
-C:/Users/g_sie/OneDrive/Pulpit/SO2_Projekt_1/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/g_sie/OneDrive/Pulpit/SO2_Projekt_1/cmake-build-debug/CMakeFiles/rebuild_cache.dir
