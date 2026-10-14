@@ -1,4 +1,5 @@
 #include "Wersja3.h"
+#include "Czekanie.h"
 #include <iostream>
 #include <chrono>
 #include <cstdlib>
@@ -11,8 +12,8 @@
 using namespace std;
 
 extern atomic<bool> running;
+extern atomic<int> racePauseMs;
 
-// Implementacja klasy Waiter
 Wersja3::Waiter::Waiter(int count) : available(count) {}
 
 void Wersja3::Waiter::acquire() {
@@ -57,7 +58,7 @@ void Wersja3::philosopher(int id) {
     int left = (id - 1 + NUM_PHILOSOPHERS) % NUM_PHILOSOPHERS;
 
     while (running.load()) {
-        // Sprawdzamy liczbę posiłków w celu sprawiedliwego podziału
+        // Sprawiedliwość: kto zjadł więcej niż min + 1 posiłków, czeka na innych
         int minMeals = INT_MAX;
         for (int j = 0; j < NUM_PHILOSOPHERS; j++) {
             minMeals = min(minMeals, mealsEaten[j].load());
@@ -70,19 +71,18 @@ void Wersja3::philosopher(int id) {
                      << ")] czeka (Posilki: " << mealsEaten[id].load()
                      << ", Min: " << minMeals << ")." << endl;
             }
-            this_thread::sleep_for(chrono::milliseconds(500));
+            sleepWhileRunning(500);
             continue;
         }
 
-        // Myślenie
         {
             lock_guard<mutex> lock(printMutex);
             statuses[id] = "mysli";
             cout << "[" << names[id] << " (Filozof " << id << ")] mysli." << endl;
         }
-        this_thread::sleep_for(chrono::milliseconds(randomTime(1000, 4000, id)));
+        sleepWhileRunning(randomTime(1000, 4000, id));
 
-        // Uzyskujemy zgodę od waitera (eliminuje deadlock)
+        // Kelner wpuszcza najwyżej N-1 filozofów naraz, co wyklucza zakleszczenie
         waiter.acquire();
         {
             lock_guard<mutex> lock(printMutex);
@@ -90,7 +90,7 @@ void Wersja3::philosopher(int id) {
             cout << "[" << names[id] << " (Filozof " << id << ")] otrzymal zgode od waitera." << endl;
         }
 
-        // Blokujemy pałeczki w kolejności rosnących indeksów, aby uniknąć kolizji
+        // Pałeczki w kolejności rosnących indeksów, co przerywa cykl oczekiwania
         int first = min(left, right);
         int second = max(left, right);
         {
@@ -98,7 +98,6 @@ void Wersja3::philosopher(int id) {
             statuses[id] = "czeka na paleczki";
         }
 
-        // Pobieranie first
         while (running.load()) {
             if (chopsticks[first].mtx.try_lock()) {
                 chopsticks[first].holder.store(id);
@@ -112,13 +111,16 @@ void Wersja3::philosopher(int id) {
             this_thread::sleep_for(chrono::milliseconds(100));
         }
         if (!running.load()) {
-            // W razie przerwania symulacji, zwalniamy waitera i koniec
             chopsticks[first].mtx.unlock();
             waiter.release();
             break;
         }
 
-        // Pobieranie second
+        // Okno wyścigu (klawisz R): pauza między pierwszą i drugą pałeczką
+        if (int pause = racePauseMs.load(); pause > 0) {
+            sleepWhileRunning(pause);
+        }
+
         while (running.load()) {
             if (chopsticks[second].mtx.try_lock()) {
                 chopsticks[second].holder.store(id);
@@ -138,16 +140,14 @@ void Wersja3::philosopher(int id) {
             break;
         }
 
-        // Teraz mamy obie pałeczki -> jedzenie
         {
             lock_guard<mutex> lock(printMutex);
             statuses[id] = "je ryz";
             cout << "[" << names[id] << " (Filozof " << id << ")] je." << endl;
         }
-        this_thread::sleep_for(chrono::milliseconds(randomTime(1000, 4000, id)));
+        sleepWhileRunning(randomTime(1000, 4000, id));
         mealsEaten[id]++;
 
-        // Odkładanie pałeczek
         chopsticks[second].holder.store(-1);
         chopsticks[second].mtx.unlock();
         chopsticks[first].holder.store(-1);
@@ -166,8 +166,21 @@ void Wersja3::philosopher(int id) {
             statuses[id] = "mysli";
             cout << "[" << names[id] << " (Filozof " << id << ")] mysli." << endl;
         }
-        this_thread::sleep_for(chrono::milliseconds(randomTime(2000, 5000, id)));
+        sleepWhileRunning(randomTime(2000, 5000, id));
     }
+}
+
+TableSnapshot Wersja3::snapshot() {
+    TableSnapshot s;
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        s.holder[i] = chopsticks[i].holder.load();
+        s.meals[i] = mealsEaten[i].load();
+    }
+    lock_guard<mutex> lock(printMutex);
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        s.status[i] = statuses[i];
+    }
+    return s;
 }
 
 void Wersja3::printSummary() {
@@ -224,7 +237,7 @@ void Wersja3::run() {
                 }
                 cout << "--------------------------------------------------------------------------------" << endl;
             }
-            this_thread::sleep_for(chrono::seconds(1));
+            sleepWhileRunning(1000);
         }
     });
 

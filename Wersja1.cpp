@@ -1,4 +1,5 @@
 #include "Wersja1.h"
+#include "Czekanie.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
@@ -9,10 +10,10 @@
 using namespace std;
 
 extern atomic<bool> running;
+extern atomic<int> racePauseMs;
 
-Wersja1::Wersja1() : chopsticks(NUM_PHILOSOPHERS), mealsEaten(NUM_PHILOSOPHERS) {
+Wersja1::Wersja1() : chopsticks(NUM_PHILOSOPHERS), mealsEaten(NUM_PHILOSOPHERS), statuses(NUM_PHILOSOPHERS, "mysli") {
     srand(static_cast<unsigned int>(time(NULL)));
-    // Inicjalizacja licznikow posilkow
     for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
         mealsEaten[i] = 0;
     }
@@ -25,7 +26,7 @@ void Wersja1::printMessage(const string &msg) {
 }
 
 int Wersja1::randomTime(int min, int max, int philosopherId) {
-    int bias = philosopherId * 300;  // jednolity bias dla wszystkich filozofów
+    int bias = philosopherId * 300;
     return rand() % (max - min + 1) + min + bias;
 }
 
@@ -34,12 +35,17 @@ void Wersja1::philosopher(int id) {
     int left = (id - 1 + NUM_PHILOSOPHERS) % NUM_PHILOSOPHERS;
 
     while (running.load()) {
-        // Najpierw pobiera prawą pałeczkę (własną)
+        {
+            lock_guard<mutex> lock(printMutex);
+            statuses[id] = "czeka na prawa";
+        }
+        // Najpierw prawa, potem lewa pałeczka: gdy wszyscy złapią prawą naraz, dochodzi do zakleszczenia
         while (running.load()) {
             if (chopsticks[right].mtx.try_lock()) {
                 chopsticks[right].holder.store(id);
                 {
                     lock_guard<mutex> lock(printMutex);
+                    statuses[id] = "czeka na lewa";
                     cout << "[" << names[id] << " (Filozof " << id
                          << ")] podniosl prawa paleczke (" << right << ")." << endl;
                 }
@@ -49,7 +55,11 @@ void Wersja1::philosopher(int id) {
         }
         if (!running.load())
             break;
-        // Następnie pobieramy lewą pałeczkę, czyli prawą pałeczkę lewego sąsiada
+        // Okno wyścigu (klawisz R): pauza między pierwszą i drugą pałeczką
+        if (int pause = racePauseMs.load(); pause > 0) {
+            sleepWhileRunning(pause);
+        }
+
         while (running.load()) {
             if (chopsticks[left].mtx.try_lock()) {
                 chopsticks[left].holder.store(id);
@@ -67,29 +77,40 @@ void Wersja1::philosopher(int id) {
             break;
         }
 
-        // Jedzenie (czas losowany od 1 do 4 sekund, z opóźnieniem zależnym od id)
         {
             lock_guard<mutex> lock(printMutex);
+            statuses[id] = "je ryz";
             cout << "[" << names[id] << " (Filozof " << id << ")] je." << endl;
         }
-        this_thread::sleep_for(chrono::milliseconds(randomTime(1000, 4000, id)));
+        sleepWhileRunning(randomTime(1000, 4000, id));
 
-        // Inkrementacja licznika posiłków
         mealsEaten[id]++;
 
-        // Odkładanie pałeczek (najpierw lewej, potem prawej)
         chopsticks[left].holder.store(-1);
         chopsticks[left].mtx.unlock();
         chopsticks[right].holder.store(-1);
         chopsticks[right].mtx.unlock();
 
-        // Myślenie (czas losowany od 2 do 5 sekund, z opóźnieniem)
         {
             lock_guard<mutex> lock(printMutex);
+            statuses[id] = "mysli";
             cout << "[" << names[id] << " (Filozof " << id << ")] mysli." << endl;
         }
-        this_thread::sleep_for(chrono::milliseconds(randomTime(2000, 5000, id)));
+        sleepWhileRunning(randomTime(2000, 5000, id));
     }
+}
+
+TableSnapshot Wersja1::snapshot() {
+    TableSnapshot s;
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        s.holder[i] = chopsticks[i].holder.load();
+        s.meals[i] = mealsEaten[i].load();
+    }
+    lock_guard<mutex> lock(printMutex);
+    for (int i = 0; i < NUM_PHILOSOPHERS; ++i) {
+        s.status[i] = statuses[i];
+    }
+    return s;
 }
 
 void Wersja1::run() {
@@ -133,7 +154,7 @@ void Wersja1::run() {
                 }
                 cout << "--------------------------------------------------------------" << endl;
             }
-            this_thread::sleep_for(chrono::seconds(1));
+            sleepWhileRunning(1000);
         }
     });
     for (auto &t : threads) {

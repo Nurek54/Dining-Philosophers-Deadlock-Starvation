@@ -17,11 +17,13 @@
   <img src="https://img.shields.io/badge/CMake-3.30-064F8C?style=flat-square&logo=cmake&logoColor=white" alt="CMake" />
   <img src="https://img.shields.io/badge/std::thread-wsp%C3%B3%C5%82bie%C5%BCno%C5%9B%C4%87-6366F1?style=flat-square" alt="std::thread" />
   <img src="https://img.shields.io/badge/std::mutex-synchronizacja-0EA5E9?style=flat-square" alt="std::mutex" />
+  <img src="https://img.shields.io/badge/raylib-5.5-F43F5E?style=flat-square" alt="raylib 5.5" />
   <img src="https://img.shields.io/badge/CLion-000000?style=flat-square&logo=clion&logoColor=white" alt="CLion" />
 </p>
 
 <p align="center">
   <a href="#zobacz-w-akcji"><b>Demo</b></a> &nbsp;·&nbsp;
+  <a href="#okno-na-żywo"><b>Okno na żywo</b></a> &nbsp;·&nbsp;
   <a href="#trzy-wersje"><b>Wersje</b></a> &nbsp;·&nbsp;
   <a href="#co-pokazały-pomiary"><b>Pomiary</b></a> &nbsp;·&nbsp;
   <a href="#jak-to-działa"><b>Jak to działa</b></a> &nbsp;·&nbsp;
@@ -30,7 +32,7 @@
 
 **Problem jedzących filozofów** to symulacja klasycznego problemu współbieżności Dijkstry w C++, napisana na przedmiot *Systemy Operacyjne 2* na Politechnice Wrocławskiej. Pięciu filozofów (Yoda, Gandalf, ObiWan, Anakin i Leia) siedzi przy okrągłym stole, a każdy z nich to osobny `std::thread`. Między każdymi dwoma leży jedna pałeczka chroniona przez `std::mutex` i nikt nie może jeść bez obu sąsiednich pałeczek.
 
-Program zawiera **trzy strategie** podnoszenia pałeczek, wybierane przy starcie. Pierwsza może doprowadzić do **zakleszczenia**, druga przerywa zakleszczenie, ale naraża jednego filozofa na **zagłodzenie**, a trzecia używa **kelnera**, stałej kolejności blokad i reguły sprawiedliwości, dzięki czemu wszyscy jedzą na zmianę. Osobny wątek monitora co sekundę drukuje tablicę statusu.
+Program zawiera **trzy strategie** podnoszenia pałeczek, wybierane przy starcie. Pierwsza może doprowadzić do **zakleszczenia**, druga przerywa zakleszczenie, ale naraża jednego filozofa na **zagłodzenie**, a trzecia używa **kelnera**, stałej kolejności blokad i reguły sprawiedliwości, dzięki czemu wszyscy jedzą na zmianę. Podczas działania wątków **okno na żywo** rysowane w raylib pokazuje stół: kto myśli, czeka albo je, gdzie leży każda pałeczka, liczniki posiłków i listę zdarzeń. Konsola dalej drukuje oryginalny log i co sekundę tablicę statusu.
 
 ## Zobacz w akcji
 
@@ -44,6 +46,30 @@ Program zawiera **trzy strategie** podnoszenia pałeczek, wybierane przy starcie
 
 <p align="center"><sub>Odtworzone z prawdziwego wyjścia programu, prędkość 2×. Wszystkie trzy przebiegi mają <a href="#wywołanie-zakleszczenia">300 ms przerwy między podniesieniem pierwszej i drugiej pałeczki</a>, co ułatwia trafienie w wyścig. Wersja 1 staje w pierwszej milisekundzie, a każdy filozof trzyma swoją prawą pałeczkę. W wersji 2 Leia odpuszcza i odkłada pałeczkę, więc reszta może jeść dalej. Wersja 3 nigdy się nie blokuje, a fioletowy filozof opuszcza kolejkę, bo zjadł więcej niż pozostali.</sub></p>
 
+## Okno na żywo
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/pl/window-deadlock.png" alt="Wersja 1 zakleszczona w oknie na żywo" /></td>
+    <td width="50%"><img src="docs/pl/window-fair.png" alt="Wersja 3 w oknie na żywo" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Wersja 1 po <kbd>R</kbd> i <kbd>N</kbd>: zakleszczenie w ciągu sekundy</sub></td>
+    <td align="center"><sub>Wersja 3: Yoda przepuszcza innych, żeby nadrobili</sub></td>
+  </tr>
+</table>
+
+Po wybraniu wersji w konsoli otwiera się okno, które śledzi symulację na bieżąco. Pałeczki przesuwają się do tego, kto je podnosi, jedzący filozof dostaje pulsującą obwódkę, a gdy każdy trzyma dokładnie jedną pałeczkę i nikt nie je, pojawia się czerwony baner.
+
+| Klawisz | Działanie |
+|---|---|
+| <kbd>R</kbd> | Włącza i wyłącza **okno wyścigu**: 300 ms przerwy między podniesieniem pierwszej i drugiej pałeczki |
+| <kbd>N</kbd> | Uruchamia symulację od nowa bez zamykania okna |
+| <kbd>L</kbd> | Przełącza język okna między polskim a angielskim |
+| <kbd>Esc</kbd> | Zamyka okno i kończy program (tak samo <kbd>Enter</kbd> w konsoli) |
+
+Żeby zobaczyć zakleszczenie na żywo: uruchom wersję 1, wciśnij <kbd>R</kbd>, a potem <kbd>N</kbd>.
+
 ## Kluczowe wyniki
 
 <table>
@@ -55,7 +81,8 @@ Program zawiera **trzy strategie** podnoszenia pałeczek, wybierane przy starcie
 </table>
 
 - **Prawdziwe wątki i blokady.** Każdy filozof to `std::thread`, każda pałeczka to `std::mutex` z `std::atomic<int>` zapamiętującym właściciela, więc monitor pokazuje stan bez zakładania blokady.
-- **Nieblokujące podnoszenie.** Pałeczki są brane przez `try_lock()` w pętli co 100 ms, więc każdy wątek zauważa `running == false` i symulacja zawsze kończy się czysto po Enterze, nawet w zakleszczeniu.
+- **Nieblokujące podnoszenie, szybkie zamykanie.** Pałeczki są brane przez `try_lock()` w pętli co 100 ms, a każde dłuższe uśpienie budzi się zaraz po zatrzymaniu symulacji, więc program kończy się w ułamku sekundy, nawet w zakleszczeniu.
+- **Okno tylko czyta.** Okno działa w wątku głównym i odczytuje jedynie migawkę (`snapshot()`) atomowych właścicieli pałeczek, liczników posiłków i statusów, więc rysowanie nie spowalnia filozofów.
 - **Trzy podręcznikowe przypadki w jednym programie.** Zakleszczenie, zagłodzenie i rozwiązanie sprawiedliwe mają ten sam stół, imiona i czasy, więc różnią się wyłącznie strategią podnoszenia pałeczek.
 - **Tablica statusu na żywo.** Co sekundę wątek monitora drukuje, kto trzyma którą pałeczkę, ile kto zjadł posiłków, a w wersjach 2 i 3 także co kto robi.
 
@@ -96,7 +123,7 @@ Działają tu trzy mechanizmy naraz:
 
 ## Co pokazały pomiary
 
-Poniższe liczby pochodzą z uruchomień niezmienionego programu: wersja 1 cztery razy, wersje 2 i 3 po dwa razy, po 3 minuty każde.
+Poniższe liczby pochodzą z uruchomień z domyślnymi czasami i wyłączonym oknem wyścigu: wersja 1 cztery razy, wersje 2 i 3 po dwa razy, po 3 minuty każde.
 
 <p align="center">
   <picture>
@@ -122,13 +149,15 @@ Warto zwrócić uwagę na kilka rzeczy:
 
 ### Wywołanie zakleszczenia
 
-Żeby wyścig był widoczny, wersja demonstracyjna dodaje 300 ms przerwy między podniesieniem pierwszej i drugiej pałeczki w każdej wersji:
+Żeby wyścig był widoczny, każda wersja może zrobić 300 ms przerwy między podniesieniem pierwszej i drugiej pałeczki. W oknie służy do tego klawisz <kbd>R</kbd>, a <kbd>N</kbd> uruchamia przebieg od nowa, żeby przerwa działała od pierwszego podniesienia:
 
 ```cpp
-this_thread::sleep_for(chrono::milliseconds(300)); // tylko w wersji demo, nie ma tego w repozytorium
+if (int pause = racePauseMs.load(); pause > 0) {
+    sleepWhileRunning(pause);  // okno wyścigu, domyślnie wyłączone
+}
 ```
 
-Przy tak otwartym oknie różnica między strategiami jest natychmiastowa (3 przebiegi na wersję, po 90 s):
+Gdy przerwa działa od startu, różnica między strategiami jest natychmiastowa (3 przebiegi na wersję, po 90 s):
 
 | | Wersja 1 | Wersja 2 | Wersja 3 |
 |---|---|---|---|
@@ -149,18 +178,24 @@ flowchart TB
     R --> P3[wątek Anakina]
     R --> P4[wątek Lei]
     R --> MON[wątek monitora<br/>tablica statusu co 1 s]
+    M --> V[wątek główny: okno raylib<br/>TableView.cpp]
+    V -.->|migawka 60 razy na sekundę| R
     P0 & P1 & P2 & P3 & P4 --> LOOP
     subgraph LOOP [pętla filozofa]
         direction LR
         T[myśli] --> H[podnosi pałeczki<br/>try_lock co 100 ms] --> E[je] --> D[odkłada pałeczki] --> T
     end
-    ENTER([Enter]) -.->|running = false| LOOP
+    ENTER([Enter / Esc]) -.->|running = false| LOOP
     ENTER -.->|running = false| MON
 ```
 
 | Element | Gdzie | Rola |
 |---|---|---|
-| `running` | `main.cpp` | globalny `std::atomic<bool>`, po Enterze ustawiany na `false`, żeby zatrzymać wszystkie wątki |
+| `running` | `main.cpp` | globalny `std::atomic<bool>`, ustawiany na `false` po Enterze albo zamknięciu okna |
+| `racePauseMs` | `main.cpp` | okno wyścigu w milisekundach, przełączane klawiszem <kbd>R</kbd> (0 = wyłączone) |
+| `snapshot()` | każdy `WersjaN.cpp` | kopiuje właścicieli pałeczek, posiłki i statusy dla okna |
+| `runTableView()` | `TableView.cpp` | okno raylib: rysowanie, zdarzenia, klawisze |
+| `sleepWhileRunning()` | `Czekanie.h` | śpi krokami po 50 ms i budzi się, gdy `running` zmieni się na `false` |
 | `Chopstick` | każdy `WersjaN.h` | `std::mutex` plus `std::atomic<int> holder` (−1 gdy wolna) |
 | `printMutex` | każdy `WersjaN.h` | pilnuje, żeby linie z różnych wątków się nie przeplatały |
 | `mealsEaten` | każdy `WersjaN.h` | `std::vector<std::atomic<int>>`, jeden licznik na filozofa |
@@ -175,9 +210,11 @@ Czasy są losowe: jedzenie trwa od 1 do 4 s, myślenie od 1 do 4 s przed posiłk
   <img src="docs/terminal.svg" alt="Sesja w terminalu: wybór wersji 3, tablica statusu i podsumowanie posiłków" width="760" />
 </p>
 
-**CLion:** otwórz folder i uruchom target `SO2_Projekt_1`.
+Okno korzysta z [raylib](https://www.raylib.com/) 5.5. Nie trzeba go instalować: CMake pobiera i buduje raylib przy pierwszej konfiguracji, do czego raz potrzebny jest Git i internet.
 
-**CMake:**
+**CLion:** otwórz folder, poczekaj aż CMake wczyta projekt i uruchom target `SO2_Projekt_1`.
+
+**CMake z wiersza poleceń:**
 
 ```bash
 cmake -S . -B build
@@ -185,29 +222,24 @@ cmake --build build
 ./build/SO2_Projekt_1
 ```
 
-**Bez CMake** (dowolny kompilator z C++20):
+Wybierz wersję (`1`, `2` lub `3`) w konsoli. Obok otworzy się okno, a log w konsoli i okno działają, dopóki nie wciśniesz <kbd>Esc</kbd> w oknie albo <kbd>Enter</kbd> w konsoli. Wersja 3 na końcu drukuje też podsumowanie posiłków.
 
-```bash
-g++ -std=c++20 -pthread main.cpp Wersja1.cpp Wersja2.cpp Wersja3.cpp -o philosophers
-./philosophers
-```
-
-Wybierz wersję (`1`, `2` lub `3`), a **Enter** kończy symulację. Wersja 3 na końcu drukuje też podsumowanie posiłków.
-
-> `CMakeLists.txt` ustawia `CMAKE_CXX_STANDARD 26`. Sam kod wymaga tylko C++20, więc ze starszym kompilatorem można tę wartość obniżyć.
+Na Linuksie raylib potrzebuje pakietów deweloperskich X11 i OpenGL (na Ubuntu: `libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev`). Bez ekranu program informuje o tym i działa tylko w konsoli.
 
 ## Struktura projektu
 
 ```
 .
-├── main.cpp          # Menu, globalna flaga running, uruchamia wybraną wersję
-├── Wersja1.h / .cpp  # Wersja 1: prawa, potem lewa, możliwe zakleszczenie
-├── Wersja2.h / .cpp  # Wersja 2: Leia rezygnuje po 5 próbach, możliwe zagłodzenie
-├── Wersja3.h / .cpp  # Wersja 3: kelner, stała kolejność blokad, reguła sprawiedliwości
-├── CMakeLists.txt    # Konfiguracja budowania
-├── README.md         # README po angielsku
-├── README.pl.md      # README po polsku
-└── docs/             # Grafiki do README (EN / PL, jasne / ciemne)
+├── main.cpp            # Menu, globalne flagi, uruchamia wybraną wersję i okno
+├── Wersja1.h / .cpp    # Wersja 1: prawa, potem lewa, możliwe zakleszczenie
+├── Wersja2.h / .cpp    # Wersja 2: Leia rezygnuje po 5 próbach, możliwe zagłodzenie
+├── Wersja3.h / .cpp    # Wersja 3: kelner, stała kolejność blokad, reguła sprawiedliwości
+├── TableView.h / .cpp  # Okno na żywo (raylib)
+├── Czekanie.h          # Uśpienie, które budzi się po zatrzymaniu symulacji
+├── CMakeLists.txt      # Konfiguracja budowania, pobiera raylib
+├── README.md           # README po angielsku
+├── README.pl.md        # README po polsku
+└── docs/               # Grafiki do README (EN / PL, jasne / ciemne)
 ```
 
 ---

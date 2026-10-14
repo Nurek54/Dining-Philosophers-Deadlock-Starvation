@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <atomic>
+#include "TableView.h"
 
 using namespace std;
 
@@ -13,6 +14,7 @@ class Wersja2 {
 public:
     Wersja2();
     void run();
+    TableSnapshot snapshot();
 
 private:
     static const int NUM_PHILOSOPHERS = 5;
@@ -29,6 +31,7 @@ private:
     mutex printMutex;
     vector<atomic<int>> mealsEaten;
     vector<string> statuses;
+    vector<atomic<int>> giveUps;
 
     void printMessage(const string &msg);
     void philosopher(int id);

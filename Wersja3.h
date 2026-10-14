@@ -7,6 +7,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <string>
+#include "TableView.h"
 
 using namespace std;
 
@@ -14,6 +15,7 @@ class Wersja3 {
 public:
     Wersja3();
     void run();
+    TableSnapshot snapshot();
 
 private:
     static const int NUM_PHILOSOPHERS = 5;
@@ -26,7 +28,7 @@ private:
         Chopstick() : holder(-1) {}
     };
 
-    // Klasa Waiter – ogranicza liczbę filozofów próbujących jednocześnie brać dwie pałeczki
+    // Kelner: ogranicza liczbę filozofów sięgających naraz po pałeczki do N-1
     class Waiter {
     public:
         Waiter(int count);
